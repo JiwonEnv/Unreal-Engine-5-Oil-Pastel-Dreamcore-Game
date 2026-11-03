@@ -120,6 +120,18 @@ private:
 	/** Graybox mesh for one color, created on demand. */
 	UInstancedStaticMeshComponent* GetBoxes(const FLinearColor& Color);
 
+#if !UE_BUILD_SHIPPING
+	/**
+	 * -plgselftest: after the runtime navmesh settles, checks the layout, that the first player stands on the
+	 * generated floor and that navigation reaches every module from the start, takes a player and a top-down
+	 * screenshot, then quits. Results are [PLGSelfTest] PASS/FAIL lines in the log.
+	 */
+	void RunSelfTestChecks();
+	void TakeTopDownShot();
+	void SelfTestCheck(bool bPassed, const FString& What);
+	int32 SelfTestFailures = 0;
+#endif
+
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMesh> CubeMesh;
 

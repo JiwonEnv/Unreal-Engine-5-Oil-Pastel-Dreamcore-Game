@@ -1,13 +1,22 @@
 #include "PLGGenerator.h"
 
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Camera/CameraActor.h"
+#include "Camera/CameraComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "Misc/CommandLine.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "PLGLayout.h"
+#include "TimerManager.h"
+#include "UnrealClient.h"
 #include "ProcLevelGen.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -50,6 +59,13 @@ void APLGGenerator::BeginPlay()
 			Seed = FMath::RandRange(1, MAX_int32 - 1);
 		}
 		Generate();
+#if !UE_BUILD_SHIPPING
+		if (FParse::Param(FCommandLine::Get(), TEXT("plgselftest")))
+		{
+			FTimerHandle Handle;
+			GetWorldTimerManager().SetTimer(Handle, this, &APLGGenerator::RunSelfTestChecks, 8.f, false);
+		}
+#endif
 	}
 	else if (!bNewSeedEachRun)
 	{
@@ -279,3 +295,142 @@ void APLGGenerator::AddModuleGeometry(const FPLGPlacedModule& Placed, const FTra
 		Segment(Cursor, Length * 0.5f - Trim, 0.f, WallHeight);
 	}
 }
+
+#if !UE_BUILD_SHIPPING
+void APLGGenerator::SelfTestCheck(bool bPassed, const FString& What)
+{
+	SelfTestFailures += bPassed ? 0 : 1;
+	UE_LOG(LogProcLevelGen, Display, TEXT("[PLGSelfTest] %s %s"), bPassed ? TEXT("PASS") : TEXT("FAIL"), *What);
+}
+
+void APLGGenerator::RunSelfTestChecks()
+{
+	int32 Live = 0;
+	int32 StartIndex = INDEX_NONE;
+	for (int32 i = 0; i < Layout.Modules.Num(); ++i)
+	{
+		if (!Layout.Modules[i].bRemoved)
+		{
+			++Live;
+			StartIndex = StartIndex == INDEX_NONE ? i : StartIndex;
+		}
+	}
+	SelfTestCheck(Live > 0, FString::Printf(TEXT("seed %d built %d modules"), Seed, Live));
+
+	int32 Instances = 0;
+	for (const UInstancedStaticMeshComponent* Component : Boxes)
+	{
+		Instances += Component ? Component->GetInstanceCount() : 0;
+	}
+	SelfTestCheck(Instances > 0, FString::Printf(TEXT("%d graybox boxes"), Instances));
+
+	// The player spawned in the start module and is standing on generated floor, not falling through.
+	const APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	if (Pawn)
+	{
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(PLGSelfTest), false, Pawn);
+		const FVector From = Pawn->GetActorLocation();
+		const bool bFloor = GetWorld()->LineTraceSingleByChannel(Hit, From, From - FVector(0.f, 0.f, 300.f), ECC_Visibility, Params) && Hit.GetActor() == this;
+		SelfTestCheck(bFloor && FMath::Abs(Pawn->GetVelocity().Z) < 10.f,
+			FString::Printf(TEXT("player stands on the generated floor (z %.0f, vz %.0f)"), From.Z, Pawn->GetVelocity().Z));
+	}
+	else
+	{
+		SelfTestCheck(false, TEXT("player has a pawn"));
+	}
+
+	// Navigation from the start pivot reaches every module's pivot.
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (Nav)
+	{
+		const ANavigationData* NavData = Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+		FNavLocation Projected;
+		const bool bOnNav = Nav->ProjectPointToNavigation(GetModuleTransform(StartIndex).GetLocation(), Projected, FVector(100.f, 100.f, 200.f));
+		UE_LOG(LogProcLevelGen, Display, TEXT("[PLGSelfTest] nav data %s, build in progress %d, start on navmesh %d"),
+			NavData ? *NavData->GetName() : TEXT("none"), Nav->IsNavigationBuildInProgress() ? 1 : 0, bOnNav ? 1 : 0);
+	}
+	if (Nav && StartIndex != INDEX_NONE)
+	{
+		// Path queries want points on the navmesh; module pivots sit on the floor top.
+		const FVector QueryExtent(100.f, 100.f, 200.f);
+		FNavLocation StartOnNav;
+		Nav->ProjectPointToNavigation(GetModuleTransform(StartIndex).GetLocation(), StartOnNav, QueryExtent);
+		const FVector Start = StartOnNav.Location;
+		int32 Reached = 0;
+		FString Missed;
+		for (int32 i = 0; i < Layout.Modules.Num(); ++i)
+		{
+			if (Layout.Modules[i].bRemoved || i == StartIndex)
+			{
+				continue;
+			}
+			FNavLocation GoalProjected;
+			Nav->ProjectPointToNavigation(GetModuleTransform(i).GetLocation(), GoalProjected, QueryExtent);
+			const FVector Goal = GoalProjected.Location;
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(GetWorld(), Start, Goal);
+			if (Path && Path->IsValid() && !Path->IsPartial())
+			{
+				++Reached;
+			}
+			else
+			{
+				Missed += FString::Printf(TEXT(" %s[%d]"), *Modules[Layout.Modules[i].Def].Name.ToString(), i);
+				FNavLocation GoalOnNav;
+				UE_LOG(LogProcLevelGen, Display, TEXT("[PLGSelfTest]   %s[%d]: path %s, %d points, goal on navmesh %d"), *Modules[Layout.Modules[i].Def].Name.ToString(), i,
+					!Path ? TEXT("null") : (!Path->IsValid() ? TEXT("invalid") : TEXT("partial")), Path ? Path->PathPoints.Num() : 0,
+					Nav->ProjectPointToNavigation(Goal, GoalOnNav, QueryExtent) ? 1 : 0);
+			}
+		}
+		SelfTestCheck(Missed.IsEmpty(), FString::Printf(TEXT("navigation reaches %d/%d modules from the start%s"), Reached, Live - 1,
+			Missed.IsEmpty() ? TEXT("") : *(TEXT(", missed:") + Missed)));
+	}
+	else
+	{
+		SelfTestCheck(false, TEXT("navigation system exists"));
+	}
+
+	FScreenshotRequest::RequestScreenshot(TEXT("PLGSelfTest_Player"), false, false);
+	FTimerHandle Handle;
+	GetWorldTimerManager().SetTimer(Handle, this, &APLGGenerator::TakeTopDownShot, 1.f, false);
+}
+
+void APLGGenerator::TakeTopDownShot()
+{
+	FBox2D Bounds(ForceInit);
+	for (const FPLGPlacedModule& Placed : Layout.Modules)
+	{
+		if (!Placed.bRemoved)
+		{
+			Bounds += PLG::Footprint(Modules[Placed.Def], Placed);
+		}
+	}
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (PC && Bounds.bIsValid)
+	{
+		PC->ConsoleCommand(TEXT("show Navigation"));
+		// Looking straight down with yaw 0, +X is up on screen and +Y is right. 90 degree horizontal FOV on 16:9.
+		const FVector2D Center = Bounds.GetCenter();
+		const float Height = FMath::Max(Bounds.GetSize().Y, Bounds.GetSize().X * 16.f / 9.f) * 0.55f + 600.f;
+		const FVector Location = GetActorTransform().TransformPosition(FVector(Center, Height));
+		if (ACameraActor* Camera = GetWorld()->SpawnActor<ACameraActor>(Location, FRotator(-90.f, 0.f, 0.f)))
+		{
+			Camera->GetCameraComponent()->SetFieldOfView(90.f);
+			Camera->GetCameraComponent()->bConstrainAspectRatio = false;
+			PC->SetViewTarget(Camera);
+		}
+	}
+	FTimerHandle ShotHandle;
+	GetWorldTimerManager().SetTimer(ShotHandle, FTimerDelegate::CreateWeakLambda(this, []()
+	{
+		FScreenshotRequest::RequestScreenshot(TEXT("PLGSelfTest_Top"), false, false);
+	}), 1.f, false);
+	FTimerHandle QuitHandle;
+	GetWorldTimerManager().SetTimer(QuitHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		UE_LOG(LogProcLevelGen, Display, TEXT("[PLGSelfTest] %s, %d failure(s)"), SelfTestFailures == 0 ? TEXT("ALL PASSED") : TEXT("FAILED"), SelfTestFailures);
+		FPlatformMisc::RequestExit(false);
+	}), 3.f, false);
+}
+#endif
