@@ -113,6 +113,9 @@ def gameplay():
     nav.set_actor_scale3d(V(50.0, 50.0, 3.0))  # the default brush is a 200 cm cube
     nav.set_actor_label("NavBounds")
     nav.set_folder_path("Gameplay")
+    # Headless runs do not create the navmesh actor on their own; without it nothing is generated at runtime.
+    recast = eas.spawn_actor_from_class(unreal.RecastNavMesh, V(0, 0, 0))
+    recast.set_folder_path("Gameplay")
 
 
 def main():
