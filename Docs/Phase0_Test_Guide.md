@@ -216,5 +216,21 @@ UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/build_p
 | 25 | PIE 2인(리슨 서버)에서 두 창의 맵이 똑같다 | ☐ |
 | 26 | 콘솔 `show navigation`에서 초록 내비메시가 생성된 바닥 전체를 덮는다 | ☐ |
 
+**자동 검사** (에디터는 닫힌 상태에서)
+
+시드 200개를 만들어 역할별 개수, 겹침, 문 연결, 도달 가능, 막다른 통로, 테마 중복, 그레이박스 생성을 확인합니다. 결과는 `[PLGTest] PASS 200/200 seeds` 형식으로 나옵니다.
+
+```
+UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/test_proc_level.py"
+```
+
+게임을 띄워 확인하는 검사도 있습니다. 시작 8초 뒤에 생성 결과, 캐릭터가 생성된 바닥 위에 서 있는지, 시작 방에서 모든 방까지 내비 경로가 있는지 확인합니다. 그다음 `Saved/Screenshots/WindowsEditor/PLGSelfTest_Player.png`, `PLGSelfTest_Top.png`(위에서 본 전체 맵)을 찍고 종료합니다. 결과는 로그의 `[PLGSelfTest]` 줄입니다.
+
+```
+UnrealEditor.exe DreamMovers.uproject /Game/Maps/Lvl_ProcGen?listen -game -windowed -ResX=1280 -ResY=720 -plgselftest
+```
+
+2026-11-03 결과: 시드 200개 모두 통과, 게임 실행 3회(모듈 8·9·12개) 모두 통과, 서버·클라이언트가 같은 시드로 같은 맵(모듈 7개)을 생성.
+
 **특정 맵 다시 보기**: 로그의 시드 번호를 `Seed`에 넣고 `bNewSeedEachRun`을 끄면 같은 맵이 나옵니다.
 **규격 경고**: 키트를 바꿨을 때 크기나 소켓이 규격을 벗어나면 로그에 `kit: ...` 경고가 뜹니다.
