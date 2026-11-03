@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Proc Level Gen",
+	"Description": "Seeded room-module assembly: snaps prebuilt rooms together by door sockets, checks overlaps, builds graybox walls and floors.",
+	"Category": "Level",
+	"CreatedBy": "JiwonEnv",
+	"CreatedByURL": "https://github.com/JiwonEnv/UE5-Procedural-Level-Generation",
+	"CanContainContent": true,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "ProcLevelGen",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
