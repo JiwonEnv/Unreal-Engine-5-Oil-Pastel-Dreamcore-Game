@@ -150,7 +150,7 @@ ADMCharacter* ADMMonster::TryCatch()
 	for (TActorIterator<ADMCharacter> It(GetWorld()); It; ++It)
 	{
 		ADMCharacter* Doll = *It;
-		if (Doll->IsDowned())
+		if (Doll->IsDowned() || Doll->IsHiding())
 		{
 			continue;
 		}

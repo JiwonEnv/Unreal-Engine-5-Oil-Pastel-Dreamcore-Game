@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "DMCottonBall.h"
 #include "DMGrabComponent.h"
+#include "DMHidingSpot.h"
 #include "DMNoiseSubsystem.h"
 #include "DreamMovers.h"
 #include "EnhancedInputComponent.h"
@@ -19,6 +20,7 @@
 #include "InputModifiers.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -47,6 +49,11 @@ ADMCharacter::ADMCharacter()
 	Move->JumpZVelocity = 380.f;
 	Move->AirControl = 0.35f;
 	Move->bOrientRotationToMovement = false;
+	// Crouched: 60 cm tall, eyes at about 50 cm, low enough to hide under a 70 cm tabletop.
+	Move->NavAgentProps.bCanCrouch = true;
+	Move->SetCrouchedHalfHeight(30.f);
+	Move->MaxWalkSpeedCrouched = CrouchSpeed;
+	CrouchedEyeHeight = 20.f;
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	Camera->SetupAttachment(GetCapsuleComponent());
@@ -63,20 +70,47 @@ ADMCharacter::ADMCharacter()
 	BodyMesh->SetupAttachment(GetCapsuleComponent());
 	BodyMesh->SetStaticMesh(CylinderMesh.Object);
 	BodyMesh->SetMaterial(0, ShapeMaterial.Object);
-	BodyMesh->SetRelativeLocation(FVector(0.f, 0.f, -15.f));
-	BodyMesh->SetRelativeScale3D(FVector(0.5f, 0.5f, 0.8f));
 	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BodyMesh->SetOwnerNoSee(true);
 
 	HeadMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeadMesh"));
 	HeadMesh->SetupAttachment(GetCapsuleComponent());
 	HeadMesh->SetStaticMesh(SphereMesh.Object);
-	HeadMesh->SetRelativeLocation(FVector(0.f, 0.f, 45.f));
-	HeadMesh->SetRelativeScale3D(FVector(0.45f));
 	HeadMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HeadMesh->SetOwnerNoSee(true);
 
 	Grab = CreateDefaultSubobject<UDMGrabComponent>(TEXT("Grab"));
+	FitBodyToCapsule(false);
+}
+
+void ADMCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ADMCharacter, HidingSpot);
+}
+
+void ADMCharacter::FitBodyToCapsule(bool bCrouched)
+{
+	// Offsets are from the capsule center: 55 cm half height standing, 30 crouched.
+	BodyMesh->SetRelativeLocation(FVector(0.f, 0.f, bCrouched ? -10.f : -15.f));
+	BodyMesh->SetRelativeScale3D(FVector(0.5f, 0.5f, bCrouched ? 0.4f : 0.8f));
+	HeadMesh->SetRelativeLocation(FVector(0.f, 0.f, bCrouched ? 15.f : 45.f));
+	HeadMesh->SetRelativeScale3D(FVector(bCrouched ? 0.4f : 0.45f));
+}
+
+void ADMCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
+{
+	Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+	// BaseEyeHeight is now CrouchedEyeHeight; the camera has to follow it, the grab aims from there.
+	Camera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	FitBodyToCapsule(true);
+}
+
+void ADMCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
+{
+	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+	Camera->SetRelativeLocation(FVector(0.f, 0.f, BaseEyeHeight));
+	FitBodyToCapsule(false);
 }
 
 void ADMCharacter::Tick(float DeltaSeconds)
@@ -87,7 +121,7 @@ void ADMCharacter::Tick(float DeltaSeconds)
 	{
 		return;
 	}
-	const bool bSprinting = GetCharacterMovement()->IsMovingOnGround() && GetVelocity().Size2D() > WalkSpeed + 30.f;
+	const bool bSprinting = !bIsCrouched && GetCharacterMovement()->IsMovingOnGround() && GetVelocity().Size2D() > WalkSpeed + 30.f;
 	FootstepTimer -= DeltaSeconds;
 	if (bSprinting && FootstepTimer <= 0.f)
 	{
@@ -110,6 +144,10 @@ void ADMCharacter::Down()
 	}
 	bDowned = true;
 	UE_LOG(LogDreamMovers, Log, TEXT("%s was caught"), *GetName());
+	if (HidingSpot)
+	{
+		HidingSpot->Leave(this);
+	}
 
 	FActorSpawnParameters Params;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -181,6 +219,8 @@ void ADMCharacter::BuildInput()
 	GrabAction = NewObject<UInputAction>(this, TEXT("IA_DM_Grab"));
 	HoldDistanceAction = NewObject<UInputAction>(this, TEXT("IA_DM_HoldDistance"));
 	HoldDistanceAction->ValueType = EInputActionValueType::Axis1D;
+	CrouchAction = NewObject<UInputAction>(this, TEXT("IA_DM_Crouch"));
+	InteractAction = NewObject<UInputAction>(this, TEXT("IA_DM_Interact"));
 
 	// Move is (X = right, Y = forward): W/S go through a swizzle onto Y.
 	auto MapMove = [this](FKey Key, bool bSwizzle, bool bNegate)
@@ -205,6 +245,8 @@ void ADMCharacter::BuildInput()
 	MappingContext->MapKey(SprintAction, EKeys::LeftShift);
 	MappingContext->MapKey(GrabAction, EKeys::LeftMouseButton);
 	MappingContext->MapKey(HoldDistanceAction, EKeys::MouseWheelAxis);
+	MappingContext->MapKey(CrouchAction, EKeys::LeftControl);
+	MappingContext->MapKey(InteractAction, EKeys::E);
 }
 
 void ADMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -226,6 +268,9 @@ void ADMCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 	Input->BindAction(GrabAction, ETriggerEvent::Started, this, &ADMCharacter::GrabPressed);
 	Input->BindAction(GrabAction, ETriggerEvent::Completed, this, &ADMCharacter::GrabReleased);
 	Input->BindAction(HoldDistanceAction, ETriggerEvent::Triggered, this, &ADMCharacter::HoldDistance);
+	Input->BindAction(CrouchAction, ETriggerEvent::Started, this, &ADMCharacter::CrouchPressed);
+	Input->BindAction(CrouchAction, ETriggerEvent::Completed, this, &ADMCharacter::CrouchReleased);
+	Input->BindAction(InteractAction, ETriggerEvent::Started, this, &ADMCharacter::InteractPressed);
 }
 
 void ADMCharacter::PawnClientRestart()
@@ -259,7 +304,10 @@ void ADMCharacter::Look(const FInputActionValue& Value)
 
 void ADMCharacter::GrabPressed()
 {
-	Grab->TryGrab();
+	if (!IsHiding())
+	{
+		Grab->TryGrab();
+	}
 }
 
 void ADMCharacter::GrabReleased()
@@ -295,4 +343,89 @@ void ADMCharacter::SetSprinting(bool bSprinting)
 void ADMCharacter::ServerSetSprinting_Implementation(bool bSprinting)
 {
 	SetSprinting(bSprinting);
+}
+
+void ADMCharacter::CrouchPressed()
+{
+	// Crouch is predicted by the movement component and replicated through it.
+	if (!IsHiding())
+	{
+		Crouch();
+	}
+}
+
+void ADMCharacter::CrouchReleased()
+{
+	// Stays crouched on its own while something low is overhead.
+	UnCrouch();
+}
+
+void ADMCharacter::InteractPressed()
+{
+	ServerInteract();
+}
+
+void ADMCharacter::ServerInteract_Implementation()
+{
+	if (bDowned)
+	{
+		return;
+	}
+	if (HidingSpot)
+	{
+		HidingSpot->Leave(this);
+		return;
+	}
+	// Climbing in with an antique on the thread is not allowed: let go first.
+	if (Grab->GetHeldValuable())
+	{
+		return;
+	}
+	if (ADMHidingSpot* Spot = ADMHidingSpot::FindReachable(this))
+	{
+		Spot->TryEnter(this);
+	}
+}
+
+void ADMCharacter::EnterHiding(ADMHidingSpot* Spot, const FVector& Location, const FRotator& Facing)
+{
+	if (!HasAuthority() || !Spot)
+	{
+		return;
+	}
+	UnCrouch();
+	HidingSpot = Spot;
+	ApplyHiding();
+	SetActorLocation(Location, false, nullptr, ETeleportType::TeleportPhysics);
+	if (AController* PC = GetController())
+	{
+		PC->ClientSetRotation(FRotator(0.f, Facing.Yaw, 0.f));
+	}
+}
+
+void ADMCharacter::LeaveHiding(const FVector& ExitLocation)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	HidingSpot = nullptr;
+	ApplyHiding();
+	// TeleportTo nudges the doll out of anything standing in front of the doors.
+	TeleportTo(ExitLocation, GetActorRotation());
+}
+
+void ADMCharacter::OnRep_HidingSpot()
+{
+	ApplyHiding();
+}
+
+void ADMCharacter::ApplyHiding()
+{
+	const bool bHiding = HidingSpot != nullptr;
+	SetActorEnableCollision(!bHiding);
+	BodyMesh->SetVisibility(!bHiding);
+	HeadMesh->SetVisibility(!bHiding);
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->SetMovementMode(bHiding ? MOVE_None : MOVE_Walking);
 }

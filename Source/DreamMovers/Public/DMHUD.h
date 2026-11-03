@@ -40,6 +40,7 @@ private:
 	void DrawCrosshairAndTarget();
 	void DrawMonsterCues();
 	void DrawDownedMessage();
+	void DrawHidingPrompt();
 	void DrawCenteredText(const FText& Text, FVector2D Position, const FLinearColor& Color, int32 Size);
 
 	/** Swaps the post-process volumes' oil pastel material for dynamic instances this HUD can drive. */

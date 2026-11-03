@@ -8,6 +8,7 @@
 #include "DMCharacter.h"
 #include "DMGameState.h"
 #include "DMGrabComponent.h"
+#include "DMHidingSpot.h"
 #include "DMValuable.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
@@ -107,6 +108,7 @@ void ADMHUD::DrawHUD()
 	DrawMonsterCues();
 	DrawCrosshairAndTarget();
 	DrawDownedMessage();
+	DrawHidingPrompt();
 	DrawRoundInfo();
 }
 
@@ -281,6 +283,38 @@ void ADMHUD::DrawDownedMessage()
 	const FVector2D Center(Canvas->ClipX * 0.5f, Canvas->ClipY * 0.3f);
 	DrawCenteredText(LOCTEXT("Downed", "솜이 터져버렸다!"), Center, Warning, 36);
 	DrawCenteredText(LOCTEXT("DownedHint", "동료가 솜뭉치를 탈출 지점에 놓아주면 다시 일어납니다"), Center + FVector2D(0.f, 44.f), Paper, 16);
+}
+
+void ADMHUD::DrawHidingPrompt()
+{
+	const ADMCharacter* Doll = Cast<ADMCharacter>(GetOwningPawn());
+	if (!Doll)
+	{
+		return;
+	}
+	const FVector2D Position(Canvas->ClipX * 0.5f, Canvas->ClipY * 0.62f);
+	if (Doll->IsHiding())
+	{
+		DrawCenteredText(LOCTEXT("Hiding", "서랍장 안에 숨어 있다  ·  E: 나오기"), Position, Paper, 18);
+		return;
+	}
+	const ADMHidingSpot* Spot = ADMHidingSpot::FindReachable(Doll);
+	if (!Spot)
+	{
+		return;
+	}
+	if (Doll->GetGrab()->GetHeldValuable())
+	{
+		DrawCenteredText(LOCTEXT("HideHolding", "물건을 놓아야 숨을 수 있다"), Position, Warning, 16);
+	}
+	else if (!Spot->HasRoom())
+	{
+		DrawCenteredText(LOCTEXT("HideFull", "서랍장이 꽉 찼다"), Position, Warning, 16);
+	}
+	else
+	{
+		DrawCenteredText(FText::Format(LOCTEXT("Hide", "E: 서랍장에 숨기 ({0}/{1})"), FText::AsNumber(Spot->GetNumOccupants()), FText::AsNumber(Spot->GetCapacity())), Position, Paper, 18);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

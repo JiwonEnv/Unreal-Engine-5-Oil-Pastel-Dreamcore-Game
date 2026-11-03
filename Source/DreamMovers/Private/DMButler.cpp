@@ -87,9 +87,9 @@ void ADMButler::OnMonsterStateChanged()
 
 bool ADMButler::CanSee(const ADMCharacter* Doll, float* OutDistance) const
 {
-	if (!Doll || Doll->IsDowned())
+	if (!Doll || Doll->IsDowned() || Doll->IsHiding())
 	{
-		return false;
+		return false; // a closed wardrobe blocks the candlelight
 	}
 	const FVector Eye = Candlelight->GetComponentLocation();
 	const FVector TargetPoint = Doll->GetPawnViewLocation();
