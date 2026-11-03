@@ -1,9 +1,13 @@
 """Phase 0 test map /Game/Maps/Lvl_Proto (run inside UnrealEditor via -ExecutePythonScript, after building the C++ module).
 
-Three open-roofed rooms in a row along +X, joined by 200 cm doorways, to test carrying through doors:
+Three open-roofed rooms in a row along +X, to test carrying through doors:
   Hall       X [-1200,    0]  player starts + extraction zone (music box bed stand-in)
-  Parlor     X [    0, 1200]  tables with small and medium items
-  Back room  X [ 1200, 2400]  heavy two-person items, and a ramp up to a ledge with fragile items
+  Parlor     X [    0, 1200]  tables with small and medium items, a desk to hide under, a one-doll wardrobe
+  Back room  X [ 1200, 2400]  heavy two-person items, a ramp up to a ledge with fragile items, a two-doll wardrobe
+
+Sizes follow the space spec in Docs/GDD.md 6.4: the house is built to human scale around 110 cm dolls.
+Hall -> parlor is a 300 cm double door (main route), parlor -> back room a 150 cm small door
+(large items have to go through lengthwise). Doors are 250 cm high, walls 20 cm thick.
 
 Item stats mirror Docs/Tripo_Asset_List.md (S/M/L). One player lifts up to 20 kg (UDMGrabComponent::MaxLiftKg),
 so the 30 kg+ items need two holders.
@@ -28,13 +32,15 @@ VALUABLE = unreal.load_class(None, "/Script/DreamMovers.DMValuable")
 EXTRACTION = unreal.load_class(None, "/Script/DreamMovers.DMExtractionZone")
 BUTLER = unreal.load_class(None, "/Script/DreamMovers.DMButler")
 BELL_HORSE = unreal.load_class(None, "/Script/DreamMovers.DMBellHorse")
+HIDING_SPOT = unreal.load_class(None, "/Script/DreamMovers.DMHidingSpot")
 V = unreal.Vector
 SHAPE = [None]  # M_Proto_Shape, created in main()
 
 WALL_H = 400.0
-WALL_T = 40.0
-DOOR_W = 200.0
-DOOR_H = 240.0
+WALL_T = 20.0
+SMALL_DOOR_W = 150.0
+DOUBLE_DOOR_W = 300.0
+DOOR_H = 250.0
 ROOM_Y = 800.0  # rooms span Y [-800, 800]
 
 
@@ -83,13 +89,35 @@ def block(label, center, size, mat, folder="Architecture"):
     return a
 
 
-def wall_with_door(label, x, mat):
-    """Wall across the rooms at X = x with a centered doorway."""
-    side = (2 * ROOM_Y - DOOR_W) / 2.0
+def wall_with_door(label, x, door_w, mat):
+    """Wall across the rooms at X = x with a centered doorway door_w wide."""
+    side = (2 * ROOM_Y - door_w) / 2.0
     for sign, suffix in ((-1, "L"), (1, "R")):
-        y = sign * (DOOR_W / 2.0 + side / 2.0)
+        y = sign * (door_w / 2.0 + side / 2.0)
         block(f"{label}_{suffix}", (x, y, WALL_H / 2.0), (WALL_T, side, WALL_H), mat)
-    block(f"{label}_Lintel", (x, 0, (DOOR_H + WALL_H) / 2.0), (WALL_T, DOOR_W, WALL_H - DOOR_H), mat)
+    block(f"{label}_Lintel", (x, 0, (DOOR_H + WALL_H) / 2.0), (WALL_T, door_w, WALL_H - DOOR_H), mat)
+
+
+def desk(label, center_xy, size, clearance, mat):
+    """Table on four legs with `clearance` cm of free space under the top, so a crouched (60 cm) doll fits."""
+    x, y = center_xy
+    top_t = 5.0
+    block(f"{label}_Top", (x, y, clearance + top_t / 2.0), (size[0], size[1], top_t), mat, "Props")
+    leg = 8.0
+    for i, (sx, sy) in enumerate(((-1, -1), (-1, 1), (1, -1), (1, 1))):
+        lx = x + sx * (size[0] / 2.0 - leg / 2.0)
+        ly = y + sy * (size[1] / 2.0 - leg / 2.0)
+        block(f"{label}_Leg{i}", (lx, ly, clearance / 2.0), (leg, leg, clearance), mat, "Props")
+
+
+def wardrobe(label, location, yaw, size, capacity):
+    """DMHidingSpot standing on the floor at `location`; its doors face +X rotated by `yaw`."""
+    a = eas.spawn_actor_from_class(HIDING_SPOT, V(*location), unreal.Rotator(0, 0, yaw))
+    a.set_editor_property("size", V(*size))
+    a.set_editor_property("capacity", capacity)
+    a.set_actor_label(label)
+    a.set_folder_path("Gameplay")
+    return a
 
 
 def valuable(name, mesh, size, location, mass, crack, value, tint, yaw=0.0, rough=0.6, metal=0.0):
@@ -147,14 +175,16 @@ def architecture(floor, wall, table):
     block("Wall_South", (600, -ROOM_Y - WALL_T / 2, WALL_H / 2), (3640, WALL_T, WALL_H), wall)
     block("Wall_West", (-1200 - WALL_T / 2, 0, WALL_H / 2), (WALL_T, 2 * ROOM_Y, WALL_H), wall)
     block("Wall_East", (2400 + WALL_T / 2, 0, WALL_H / 2), (WALL_T, 2 * ROOM_Y, WALL_H), wall)
-    wall_with_door("Wall_HallParlor", 0, wall)
-    wall_with_door("Wall_ParlorBack", 1200, wall)
+    wall_with_door("Wall_HallParlor", 0, DOUBLE_DOOR_W, wall)
+    wall_with_door("Wall_ParlorBack", 1200, SMALL_DOOR_W, wall)
 
     # Parlor tables (70 cm tall) and a narrow gap between two cabinets to squeeze items through.
     for i, (x, y) in enumerate(((350, -450), (350, 450), (850, -450), (850, 450))):
         block(f"Table_{i}", (x, y, 35), (180, 100, 70), table, "Props")
     block("Cabinet_A", (600, -200, 100), (120, 250, 200), table, "Props")
     block("Cabinet_B", (600, 200, 100), (120, 250, 200), table, "Props")
+    # Writing desk on the butler's route: 80 cm under the top, crouch (Ctrl) to hide beneath it.
+    desk("Desk", (600, 620), (150, 80), 80.0, table)
 
     # Back room ledge with a ramp, for the "bring it down without dropping it" test.
     block("Ledge", (2150, 500, 75), (500, 600, 150), table, "Props")
@@ -235,6 +265,13 @@ def monsters():
     horse.set_folder_path("Monsters")
 
 
+def hiding_spots():
+    # Narrow wardrobe for one doll against the parlor's north wall, doors facing into the room.
+    wardrobe("Wardrobe_Parlor", (100, ROOM_Y - 35, 0), -90, (70, 70, 180), 1)
+    # Wide wardrobe for two dolls against the back room's south wall, near the small door.
+    wardrobe("Wardrobe_Back", (1350, -ROOM_Y + 35, 0), 90, (70, 130, 200), 2)
+
+
 def main():
     open_empty_map()
     SHAPE[0] = shape_master()
@@ -245,6 +282,7 @@ def main():
     architecture(floor, wall, table)
     gameplay()
     monsters()
+    hiding_spots()
     require_map_open()
     les.save_current_level()
     log("build_level done")
