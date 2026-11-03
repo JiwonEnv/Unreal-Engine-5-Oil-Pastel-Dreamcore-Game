@@ -26,11 +26,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "HUD")
 	float JingleDistance = 2500.f;
 
-	/** Share of the dream timer left when the picture starts losing its color. */
+	/** Dream stability left when the picture starts losing its color. */
 	UPROPERTY(EditDefaultsOnly, Category = "Dream", meta = (ClampMin = "0", ClampMax = "1"))
 	float CollapseStartsAt = 0.5f;
 
-	/** How far the picture fades toward a bare sketch when the timer reaches zero (1 = sketch only). */
+	/** How far the picture fades toward a bare sketch when stability reaches zero (1 = sketch only). */
 	UPROPERTY(EditDefaultsOnly, Category = "Dream", meta = (ClampMin = "0", ClampMax = "1"))
 	float CollapseAtWake = 0.75f;
 

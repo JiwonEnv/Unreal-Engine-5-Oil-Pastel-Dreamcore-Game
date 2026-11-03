@@ -20,15 +20,16 @@ void ADMGameMode::StartPlay()
 {
 	Super::StartPlay();
 
-	int32 TotalValue = 0;
+	MapValue = 0;
 	for (TActorIterator<ADMValuable> It(GetWorld()); It; ++It)
 	{
-		TotalValue += It->GetCurrentValue();
+		MapValue += It->GetCurrentValue();
 	}
 	if (ADMGameState* GS = GetGameState<ADMGameState>())
 	{
-		GS->StartRound(FMath::RoundToInt(TotalValue * TargetShare), RoundSeconds);
+		GS->StartRound(0, RoundSeconds);
 	}
+	UpdateTarget();
 	GetWorldTimerManager().SetTimer(CheckTimer, this, &ADMGameMode::CheckRound, 0.5f, true);
 
 #if !UE_BUILD_SHIPPING
@@ -37,6 +38,37 @@ void ADMGameMode::StartPlay()
 		GetWorld()->SpawnActor<ADMSelfTest>();
 	}
 #endif
+}
+
+void ADMGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	UpdateTarget();
+}
+
+void ADMGameMode::Logout(AController* Exiting)
+{
+	Super::Logout(Exiting);
+	UpdateTarget(Exiting);
+}
+
+void ADMGameMode::UpdateTarget(const AController* Leaving)
+{
+	ADMGameState* GS = GetGameState<ADMGameState>();
+	if (!GS || MapValue <= 0)
+	{
+		return;
+	}
+	int32 Players = 0;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (It->Get() != Leaving)
+		{
+			++Players;
+		}
+	}
+	const float Share = FMath::Min(1.f, BaseTargetShare + TargetSharePerPlayer * FMath::Max(1, Players));
+	GS->SetTargetValue(FMath::RoundToInt(MapValue * Share));
 }
 
 void ADMGameMode::CheckRound()
@@ -52,7 +84,7 @@ void ADMGameMode::CheckRound()
 	}
 	else if (GS->GetRemainingSeconds() <= 0.f || AreAllPlayersDown())
 	{
-		// The dream woke up before enough was banked, or nobody is left to carry anything.
+		// The dream woke up (time and banking drained it) before enough was banked, or nobody is left to carry anything.
 		GS->EndRound(EDMRoundState::Failed);
 	}
 	else

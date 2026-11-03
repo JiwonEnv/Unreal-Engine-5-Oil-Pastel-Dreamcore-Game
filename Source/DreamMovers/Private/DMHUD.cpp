@@ -76,9 +76,8 @@ void ADMHUD::UpdateDreamCollapse(float DeltaSeconds)
 	case EDMRoundState::Playing:
 		if (GS->GetRoundDuration() > 0.f)
 		{
-			// Full color until CollapseStartsAt of the time is left, then fade toward the sketch.
-			const float Left = GS->GetRemainingSeconds() / GS->GetRoundDuration();
-			Target = FMath::GetMappedRangeValueClamped(FVector2f(CollapseStartsAt, 0.f), FVector2f(0.f, CollapseAtWake), Left);
+			// Full color until stability drops to CollapseStartsAt, then fade toward the sketch.
+			Target = FMath::GetMappedRangeValueClamped(FVector2f(CollapseStartsAt, 0.f), FVector2f(0.f, CollapseAtWake), GS->GetStability());
 		}
 		break;
 	case EDMRoundState::Failed:
@@ -130,7 +129,8 @@ void ADMHUD::DrawRoundInfo()
 
 	const int32 Seconds = FMath::CeilToInt(GS->GetRemainingSeconds());
 	const FText Score = FText::Format(LOCTEXT("Score", "모은 금액 {0} / 목표 {1}"), FText::AsNumber(GS->GetCollectedValue()), FText::AsNumber(GS->GetTargetValue()));
-	const FText Timer = FText::Format(LOCTEXT("Timer", "꿈이 깨기까지 {0}:{1}"), FText::AsNumber(Seconds / 60), FText::FromString(FString::Printf(TEXT("%02d"), Seconds % 60)));
+	const FText Timer = FText::Format(LOCTEXT("Timer", "꿈 안정도 {0}%  ·  깨기까지 {1}:{2}"), FText::AsNumber(FMath::CeilToInt(GS->GetStability() * 100.f)),
+		FText::AsNumber(Seconds / 60), FText::FromString(FString::Printf(TEXT("%02d"), Seconds % 60)));
 
 	const float CenterX = Canvas->ClipX * 0.5f;
 	DrawCenteredText(Score, FVector2D(CenterX, 40.f), GS->IsTargetReached() ? Good : Paper, 22);

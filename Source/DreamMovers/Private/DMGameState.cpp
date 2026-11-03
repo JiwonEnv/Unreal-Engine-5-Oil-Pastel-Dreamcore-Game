@@ -23,11 +23,20 @@ void ADMGameState::StartRound(int32 InTargetValue, float DurationSeconds)
 	RoundState = EDMRoundState::Playing;
 }
 
+void ADMGameState::SetTargetValue(int32 InTargetValue)
+{
+	if (RoundState == EDMRoundState::Playing)
+	{
+		TargetValue = InTargetValue;
+	}
+}
+
 void ADMGameState::AddCollected(int32 Value)
 {
 	if (RoundState == EDMRoundState::Playing)
 	{
 		CollectedValue += Value;
+		RoundEndTime -= Value * DrainSecondsPer1000 / 1000.f;
 	}
 }
 
