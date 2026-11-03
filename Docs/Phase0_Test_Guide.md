@@ -190,3 +190,31 @@ UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/build_l
 
 **빨리 보려면**: 안정도 감소는 `DMGameState.h`의 `DrainSecondsPer1000`을 크게(예: 200) 하면 납품 한 번에 바로 보입니다.
 **알려진 한계**: 서랍장 안 시점은 큐브 안쪽이라 문틈 없이 바깥이 그대로 보입니다(임시). 4인 목표(60%)는 납품만으로 약 400초가 빠지니 1단계에서 수치를 다시 봅니다.
+
+## 14. 절차적 맵 (ProcLevelGen 플러그인)
+
+**준비**
+1. 에디터를 닫고 `DreamMovers.uproject`를 열면 "다시 빌드할까요?"가 뜹니다. **예**를 누르면 새 플러그인 `ProcLevelGen`이 같이 빌드됩니다.
+2. 테스트 맵을 만듭니다. 에디터는 닫힌 상태여야 합니다.
+
+```
+UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/build_proc_level.py"
+```
+
+3. `Content/Maps/Lvl_ProcGen`을 엽니다. 맵에는 생성기, 조명, 시작 지점, 탈출 지점, 내비 범위만 있습니다. 골동품과 몬스터는 아직 없습니다.
+
+**에디터에서 미리보기**: `LevelGenerator` 액터 선택 → Details → **Preview New Seed**를 누를 때마다 다른 맵이 뜹니다. 위에서 내려다보면(Top 뷰) 방 이름과 테마 이름이 보입니다.
+
+| # | 확인할 것 | 결과 |
+|---|---|---|
+| 19 | Preview New Seed를 여러 번 눌러도 방끼리 겹치거나 벽이 문을 막는 일이 없다 | ☐ |
+| 20 | 현관 홀 → 회전목마 홀은 항상 이중문(300cm)으로 바로 이어진다 | ☐ |
+| 21 | 일반 방 4개는 서로 다른 테마 색(분홍, 파랑, 갈색, 어두운 보라)이다 | ☐ |
+| 22 | 다락 침실이 시작에서 먼 곳에 있고, 막다른 통로가 없다 | ☐ |
+| 23 | 맞닿은 벽은 두께 20cm 하나로 보이고, 문 위에 상인방(250~400cm)이 있다 | ☐ |
+| 24 | 플레이하면 매번 다른 맵이 나오고, 출력 로그에 `LogProcLevelGen: ... seed N: M modules`가 찍힌다 | ☐ |
+| 25 | PIE 2인(리슨 서버)에서 두 창의 맵이 똑같다 | ☐ |
+| 26 | 콘솔 `show navigation`에서 초록 내비메시가 생성된 바닥 전체를 덮는다 | ☐ |
+
+**특정 맵 다시 보기**: 로그의 시드 번호를 `Seed`에 넣고 `bNewSeedEachRun`을 끄면 같은 맵이 나옵니다.
+**규격 경고**: 키트를 바꿨을 때 크기나 소켓이 규격을 벗어나면 로그에 `kit: ...` 경고가 뜹니다.
