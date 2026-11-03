@@ -50,7 +50,7 @@ ADMCharacter::ADMCharacter()
 	Move->AirControl = 0.35f;
 	Move->bOrientRotationToMovement = false;
 	// Crouched: 60 cm tall, eyes at about 50 cm, low enough to hide under a 70 cm tabletop.
-	Move->NavAgentProps.bCanCrouch = true;
+	Move->GetNavAgentPropertiesRef().bCanCrouch = true;
 	Move->SetCrouchedHalfHeight(30.f);
 	Move->MaxWalkSpeedCrouched = CrouchSpeed;
 	CrouchedEyeHeight = 20.f;

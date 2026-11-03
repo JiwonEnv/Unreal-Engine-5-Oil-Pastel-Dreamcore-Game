@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "DMCharacter.h"
 #include "DMNoiseSubsystem.h"
+#include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "Materials/MaterialInterface.h"
