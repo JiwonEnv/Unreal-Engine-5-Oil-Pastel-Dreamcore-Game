@@ -28,6 +28,23 @@ ADMHidingSpot::ADMHidingSpot()
 void ADMHidingSpot::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	ApplyShape();
+}
+
+void ADMHidingSpot::Configure(const FVector& InSize, int32 InCapacity)
+{
+	Size = InSize;
+	Capacity = FMath::Clamp(InCapacity, 1, 2);
+	ApplyShape();
+}
+
+void ADMHidingSpot::OnRep_Shape()
+{
+	ApplyShape();
+}
+
+void ADMHidingSpot::ApplyShape()
+{
 	// The engine cube is 100 cm and centered.
 	Body->SetRelativeLocation(FVector(0.f, 0.f, Size.Z * 0.5f));
 	Body->SetRelativeScale3D(Size / 100.f);
@@ -37,6 +54,8 @@ void ADMHidingSpot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ADMHidingSpot, NumOccupants);
+	DOREPLIFETIME_CONDITION(ADMHidingSpot, Size, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ADMHidingSpot, Capacity, COND_InitialOnly);
 }
 
 ADMHidingSpot* ADMHidingSpot::FindReachable(const ADMCharacter* Doll)

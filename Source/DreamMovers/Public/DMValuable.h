@@ -4,8 +4,48 @@
 #include "GameFramework/Actor.h"
 #include "DMValuable.generated.h"
 
+class UStaticMesh;
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
+
+/** Everything that makes one antique, for items spawned at runtime (a generated map). Replicated once to clients. */
+USTRUCT()
+struct DREAMMOVERS_API FDMValuableSpec
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FText Name;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMesh> Mesh;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> Material;
+
+	/** Full size in cm; the engine shapes are 100 cm. */
+	UPROPERTY()
+	FVector Size = FVector(30.f);
+
+	UPROPERTY()
+	float MassKg = 2.f;
+
+	UPROPERTY()
+	float CrackSpeed = 350.f;
+
+	UPROPERTY()
+	int32 Value = 1000;
+
+	UPROPERTY()
+	FLinearColor Tint = FLinearColor(0.9f, 0.75f, 0.45f);
+
+	UPROPERTY()
+	float Roughness = 0.6f;
+
+	UPROPERTY()
+	float Metallic = 0.f;
+};
 
 /**
  * A fragile antique the players carry to the extraction zone.
@@ -40,6 +80,9 @@ public:
 
 	/** Server: bank the current value and remove the item. */
 	virtual void Extract();
+
+	/** Server, between SpawnActorDeferred and FinishSpawning: turns a default item into this antique. */
+	void InitFromSpec(const FDMValuableSpec& InSpec);
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Valuable")
@@ -96,6 +139,10 @@ private:
 	UFUNCTION()
 	void OnRep_Cracks();
 
+	UFUNCTION()
+	void OnRep_Spec();
+	void ApplySpec();
+
 	void ApplyMassAndColor();
 
 protected:
@@ -112,6 +159,10 @@ private:
 
 	UPROPERTY(Replicated)
 	int32 NumHolders = 0;
+
+	/** Empty (no mesh) for items placed in the editor, which already carry their look. */
+	UPROPERTY(ReplicatedUsing = OnRep_Spec)
+	FDMValuableSpec Spec;
 
 	bool bExtracted = false;
 

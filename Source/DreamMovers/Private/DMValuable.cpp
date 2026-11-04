@@ -86,6 +86,42 @@ void ADMValuable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	DOREPLIFETIME(ADMValuable, CurrentValue);
 	DOREPLIFETIME(ADMValuable, Cracks);
 	DOREPLIFETIME(ADMValuable, NumHolders);
+	DOREPLIFETIME_CONDITION(ADMValuable, Spec, COND_InitialOnly);
+}
+
+void ADMValuable::InitFromSpec(const FDMValuableSpec& InSpec)
+{
+	Spec = InSpec;
+	ApplySpec();
+}
+
+void ADMValuable::OnRep_Spec()
+{
+	ApplySpec();
+}
+
+void ADMValuable::ApplySpec()
+{
+	if (!Spec.Mesh)
+	{
+		return;
+	}
+	DisplayName = Spec.Name;
+	BaseValue = Spec.Value;
+	MassKg = Spec.MassKg;
+	CrackSpeed = Spec.CrackSpeed;
+	Tint = Spec.Tint;
+	Roughness = Spec.Roughness;
+	Metallic = Spec.Metallic;
+	Mesh->SetStaticMesh(Spec.Mesh);
+	if (Spec.Material)
+	{
+		Mesh->SetMaterial(0, Spec.Material);
+	}
+	SetActorScale3D(Spec.Size / 100.f);
+	// The tint instance belongs to the old material.
+	TintMaterial = nullptr;
+	ApplyMassAndColor();
 }
 
 void ADMValuable::AddHolder()

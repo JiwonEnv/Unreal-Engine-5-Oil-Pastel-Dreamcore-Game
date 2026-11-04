@@ -9,7 +9,7 @@ public class DreamMovers : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "SlateCore",
-			"AIModule", "NavigationSystem", "GameplayTasks"
+			"AIModule", "NavigationSystem", "GameplayTasks", "ProcLevelGen"
 		});
 	}
 }

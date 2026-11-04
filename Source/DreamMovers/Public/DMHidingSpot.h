@@ -28,6 +28,9 @@ public:
 	/** Server: lets Doll out in front of the doors. */
 	void Leave(ADMCharacter* Doll);
 
+	/** Server, between SpawnActorDeferred and FinishSpawning. */
+	void Configure(const FVector& InSize, int32 InCapacity);
+
 	bool HasRoom() const { return NumOccupants < Capacity; }
 	int32 GetNumOccupants() const { return NumOccupants; }
 	int32 GetCapacity() const { return Capacity; }
@@ -40,11 +43,11 @@ protected:
 	TObjectPtr<UStaticMeshComponent> Body;
 
 	/** Outer size in cm (depth, width, height). */
-	UPROPERTY(EditAnywhere, Category = "Hiding")
+	UPROPERTY(EditAnywhere, ReplicatedUsing = OnRep_Shape, Category = "Hiding")
 	FVector Size = FVector(70.f, 130.f, 200.f);
 
 	/** One doll for a narrow wardrobe, two for a wide one. */
-	UPROPERTY(EditAnywhere, Category = "Hiding", meta = (ClampMin = "1", ClampMax = "2"))
+	UPROPERTY(EditAnywhere, Replicated, Category = "Hiding", meta = (ClampMin = "1", ClampMax = "2"))
 	int32 Capacity = 2;
 
 	/** The doors creak this far (cm) when someone gets in or out. */
@@ -56,6 +59,10 @@ protected:
 	float ReachDistance = 120.f;
 
 private:
+	UFUNCTION()
+	void OnRep_Shape();
+	void ApplyShape();
+
 	FVector GetSlotLocation(int32 Slot) const;
 	FVector GetExitLocation(int32 Slot) const;
 	void PurgeOccupants();

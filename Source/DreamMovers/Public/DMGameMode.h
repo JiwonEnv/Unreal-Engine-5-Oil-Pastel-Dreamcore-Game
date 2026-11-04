@@ -4,6 +4,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "DMGameMode.generated.h"
 
+class APLGGenerator;
+
 /**
  * One dream run: the target is a share of everything on the map that grows with the player count,
  * the timer is the dream's stability. Banking the target wins, running out of stability fails; the round restarts on its own after a short summary.
@@ -39,6 +41,8 @@ protected:
 	float SummarySeconds = 8.f;
 
 private:
+	/** A generated map comes empty: put the antiques, wardrobes and monsters on its spawn points. */
+	void PopulateGeneratedLevel(APLGGenerator& Generator);
 	void UpdateTarget(const AController* Leaving = nullptr);
 	void CheckRound();
 	bool AreAllPlayersDown() const;

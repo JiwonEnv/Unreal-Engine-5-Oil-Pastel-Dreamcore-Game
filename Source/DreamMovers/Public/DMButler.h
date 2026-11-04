@@ -22,6 +22,9 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** Before BeginPlay (deferred spawn): loop of points relative to the spawn transform. */
+	void SetPatrolPoints(const TArray<FVector>& RelativePoints) { PatrolPoints = RelativePoints; }
+
 	/** 0..1, how close it is to spotting someone. Drives the "?" over its head. */
 	float GetSuspicion() const { return Suspicion / 255.f; }
 
