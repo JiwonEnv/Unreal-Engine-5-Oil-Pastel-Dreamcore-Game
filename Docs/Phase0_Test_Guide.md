@@ -6,7 +6,7 @@
 
 1. `DreamMovers.uproject`를 더블클릭해 언리얼 5.8 에디터로 엽니다.
    - "모듈을 다시 빌드할까요?"라고 물으면 **예**.
-2. 시작 맵 `Content/Maps/Lvl_Proto`가 자동으로 열립니다.
+2. 시작 맵 `Content/Maps/Lvl_ProcGen`(절차적 생성 맵)이 자동으로 열립니다. 고정 배치 테스트 맵 `Lvl_Proto`는 비교용과 `-dmselftest`용으로 남아 있습니다. 4~5장과 11장의 방 설명은 `Lvl_Proto` 기준입니다.
 
 ## 2. 멀티 테스트 설정 (PIE)
 
@@ -201,7 +201,12 @@ UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/build_l
 UnrealEditor-Cmd.exe DreamMovers.uproject -ExecutePythonScript="Tools/ue/build_proc_level.py"
 ```
 
-3. `Content/Maps/Lvl_ProcGen`을 엽니다. 맵에는 생성기, 조명, 시작 지점, 탈출 지점, 내비 범위만 있습니다. 골동품과 몬스터는 아직 없습니다.
+3. `Content/Maps/Lvl_ProcGen`을 엽니다. 맵에 저장된 것은 생성기, 조명, 시작 지점, 탈출 지점, 내비 범위뿐입니다. 나머지는 플레이할 때 서버가 생성된 방의 스폰 포인트에 배치합니다.
+   - 골동품 15종이 방마다 섞인 위치에 놓입니다. 목표 금액은 배치가 끝난 뒤 계산합니다.
+   - 서랍장: 작은 방과 다락 침실에는 1인용, 큰 방과 회전목마 홀에는 2인용이 놓입니다.
+   - 일반 방마다 밑에 숨을 수 있는 책상(상판 아래 80cm)이 있습니다.
+   - 종 달린 말은 회전목마 홀 가운데에서 기다립니다.
+   - 촛대 집사는 성물 예배실(Chapel 테마)에서 출발해 일반 방과 허브를 돌며 순찰합니다. 그 테마가 없는 맵이면 가장 깊은 방에서 출발합니다.
 
 **에디터에서 미리보기**: `LevelGenerator` 액터 선택 → Details → **Preview New Seed**를 누를 때마다 다른 맵이 뜹니다. 위에서 내려다보면(Top 뷰) 방 이름과 테마 이름이 보입니다.
 
@@ -231,6 +236,12 @@ UnrealEditor.exe DreamMovers.uproject /Game/Maps/Lvl_ProcGen?listen -game -windo
 ```
 
 2026-11-03 결과: 시드 200개 모두 통과, 게임 실행 3회(모듈 8·9·12개) 모두 통과, 서버·클라이언트가 같은 시드로 같은 맵(모듈 7개)을 생성.
+
+같은 실행에서 콘텐츠도 확인합니다. 7.5초 뒤 로그에 `[DMProcTest]` 줄이 찍히고, 다음이 맞으면 PASS입니다.
+- 골동품이 모두 바닥 위에 멈춰 있다
+- 서랍장이 하나 이상 있다
+- 집사와 말이 각각 하나씩 있고 AI가 붙어 있다
+- 목표 금액이 0보다 크다
 
 **특정 맵 다시 보기**: 로그의 시드 번호를 `Seed`에 넣고 `bNewSeedEachRun`을 끄면 같은 맵이 나옵니다.
 **규격 경고**: 키트를 바꿨을 때 크기나 소켓이 규격을 벗어나면 로그에 `kit: ...` 경고가 뜹니다.
