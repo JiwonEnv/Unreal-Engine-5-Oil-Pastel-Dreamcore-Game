@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Math/RandomStream.h"
 #include "PLGTypes.h"
 #include "PLGGenerator.generated.h"
 
@@ -41,6 +42,15 @@ public:
 
 	const FPLGLayout& GetLayout() const { return Layout; }
 	const TArray<FPLGModuleDef>& GetModules() const { return Modules; }
+	const TArray<FPLGTheme>& GetThemes() const { return Themes; }
+	int32 GetSeed() const { return Seed; }
+
+	/** Every spawn point with this tag in the built layout, in world space. */
+	UFUNCTION(BlueprintPure, Category = "Generation")
+	TArray<FPLGSpawnSlot> GetSpawnSlots(FName Tag) const;
+
+	/** Random stream for content choices, derived from the seed (the server uses it; clients get the results replicated). */
+	FRandomStream MakeContentStream() const;
 
 	/** World transform of a placed module's pivot (floor top, footprint center). */
 	UFUNCTION(BlueprintPure, Category = "Generation")
@@ -101,6 +111,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Graybox")
 	FLinearColor DefaultWallColor = FLinearColor(0.9f, 0.85f, 0.75f);
+
+	UPROPERTY(EditAnywhere, Category = "Graybox")
+	FLinearColor PropColor = FLinearColor(0.35f, 0.22f, 0.15f);
 
 	/** Module name (and theme) floating in each module. */
 	UPROPERTY(EditAnywhere, Category = "Graybox")

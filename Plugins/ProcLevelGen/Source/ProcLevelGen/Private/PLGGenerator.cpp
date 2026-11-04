@@ -111,6 +111,38 @@ FTransform APLGGenerator::GetModuleTransform(int32 PlacedIndex) const
 	return Local * GetActorTransform();
 }
 
+TArray<FPLGSpawnSlot> APLGGenerator::GetSpawnSlots(FName Tag) const
+{
+	TArray<FPLGSpawnSlot> Slots;
+	for (int32 i = 0; i < Layout.Modules.Num(); ++i)
+	{
+		const FPLGPlacedModule& Placed = Layout.Modules[i];
+		if (Placed.bRemoved || !Modules.IsValidIndex(Placed.Def))
+		{
+			continue;
+		}
+		const FPLGModuleDef& Def = Modules[Placed.Def];
+		const FTransform ModuleToWorld = GetModuleTransform(i);
+		for (const FPLGSpawnPoint& Point : Def.SpawnPoints)
+		{
+			if (Point.Tag == Tag)
+			{
+				FPLGSpawnSlot& Slot = Slots.AddDefaulted_GetRef();
+				Slot.Transform = FTransform(FRotator(0.f, Point.Yaw, 0.f), Point.Location) * ModuleToWorld;
+				Slot.Module = i;
+				Slot.Role = Def.Role;
+				Slot.Theme = Placed.Theme;
+			}
+		}
+	}
+	return Slots;
+}
+
+FRandomStream APLGGenerator::MakeContentStream() const
+{
+	return FRandomStream(int32(HashCombineFast(uint32(Seed), 0x5EEDC0DEu)));
+}
+
 void APLGGenerator::Generate()
 {
 	for (const FString& Problem : PLG::ValidateModules(Modules, GridSize))
@@ -248,6 +280,14 @@ void APLGGenerator::AddModuleGeometry(const FPLGPlacedModule& Placed, const FTra
 	};
 
 	AddBox(Floor, FVector(0.f, 0.f, -FloorThickness * 0.5f), FVector(Def.Size.X, Def.Size.Y, FloorThickness));
+	if (Def.Props.Num() > 0)
+	{
+		UInstancedStaticMeshComponent* Props = GetBoxes(PropColor);
+		for (const FPLGPropBox& Prop : Def.Props)
+		{
+			AddBox(Props, Prop.Center, Prop.Size);
+		}
+	}
 
 	// Half the wall thickness, inside the footprint: the neighbor builds the other half.
 	const float Half = WallThickness * 0.5f;

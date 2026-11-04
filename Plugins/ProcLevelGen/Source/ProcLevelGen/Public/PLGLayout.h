@@ -43,7 +43,12 @@ namespace PLG
 	 */
 	PROCLEVELGEN_API bool GenerateLayout(const FPLGLayoutSettings& Settings, int32 Seed, FPLGLayout& OutLayout, FString& OutReport);
 
-	/** The 3 + 2 + 3 graybox kit: start, hub, end; two general room frames; straight, corner and T corridors. */
+	/**
+	 * The 3 + 2 + 3 graybox kit: start, hub, end; two general room frames; straight, corner and T corridors.
+	 * Spawn point tags: Item (floor spot for a carried object), HideSmall / HideLarge (against a wall, facing into
+	 * the room, for a one or two person hiding spot), Guard (a post for a waiting monster).
+	 * General rooms carry a desk prop to crawl under.
+	 */
 	PROCLEVELGEN_API TArray<FPLGModuleDef> MakeSampleModules();
 	PROCLEVELGEN_API TArray<FPLGTheme> MakeSampleThemes();
 }

@@ -392,6 +392,24 @@ namespace PLG
 				}
 			}
 		}
+		for (const FPLGModuleDef& Def : Modules)
+		{
+			const FVector2D Half = Def.Size * 0.5f;
+			for (const FPLGSpawnPoint& Point : Def.SpawnPoints)
+			{
+				if (FMath::Abs(Point.Location.X) > Half.X || FMath::Abs(Point.Location.Y) > Half.Y)
+				{
+					Problems.Add(FString::Printf(TEXT("%s: spawn point %s at (%.0f, %.0f) is outside the footprint"), *Def.Name.ToString(), *Point.Tag.ToString(), Point.Location.X, Point.Location.Y));
+				}
+			}
+			for (const FPLGPropBox& Prop : Def.Props)
+			{
+				if (FMath::Abs(Prop.Center.X) + Prop.Size.X * 0.5f > Half.X || FMath::Abs(Prop.Center.Y) + Prop.Size.Y * 0.5f > Half.Y)
+				{
+					Problems.Add(FString::Printf(TEXT("%s: a prop at (%.0f, %.0f) sticks out of the footprint"), *Def.Name.ToString(), Prop.Center.X, Prop.Center.Y));
+				}
+			}
+		}
 		const TCHAR* RoleNames[NumRoles] = { TEXT("Start"), TEXT("Hub"), TEXT("End"), TEXT("Room"), TEXT("Corridor") };
 		for (int32 Role = 0; Role < NumRoles; ++Role)
 		{
@@ -440,6 +458,35 @@ namespace PLG
 			Socket.Offset = Offset;
 			return Socket;
 		};
+		auto Spot = [](const TCHAR* Tag, float X, float Y, float Yaw = 0.f)
+		{
+			FPLGSpawnPoint Point;
+			Point.Tag = Tag;
+			Point.Location = FVector(X, Y, 0.f);
+			Point.Yaw = Yaw;
+			return Point;
+		};
+		// Desk on four legs with 80 cm under the top: a crouched 60 cm doll fits, a standing one does not.
+		auto Desk = [](float X, float Y, float SizeX, float SizeY)
+		{
+			constexpr float Clearance = 80.f;
+			constexpr float Top = 5.f;
+			constexpr float Leg = 8.f;
+			TArray<FPLGPropBox> Boxes;
+			FPLGPropBox Board;
+			Board.Center = FVector(X, Y, Clearance + Top * 0.5f);
+			Board.Size = FVector(SizeX, SizeY, Top);
+			Boxes.Add(Board);
+			const FVector2D Corners[] = { FVector2D(-1.f, -1.f), FVector2D(-1.f, 1.f), FVector2D(1.f, -1.f), FVector2D(1.f, 1.f) };
+			for (const FVector2D& Corner : Corners)
+			{
+				FPLGPropBox LegBox;
+				LegBox.Center = FVector(X + Corner.X * (SizeX - Leg) * 0.5f, Y + Corner.Y * (SizeY - Leg) * 0.5f, Clearance * 0.5f);
+				LegBox.Size = FVector(Leg, Leg, Clearance);
+				Boxes.Add(LegBox);
+			}
+			return Boxes;
+		};
 		auto Module = [](const TCHAR* Name, EPLGRole Role, float X, float Y, TArray<FPLGSocket> Sockets, float Weight = 1.f)
 		{
 			FPLGModuleDef Def;
@@ -454,14 +501,31 @@ namespace PLG
 		TArray<FPLGModuleDef> Out;
 		// Fixed rooms
 		Out.Add(Module(TEXT("Start"), EPLGRole::Start, 1000.f, 1000.f, { Door(EPLGEdge::PosX, Double) }));
-		Out.Add(Module(TEXT("Hub"), EPLGRole::Hub, 1600.f, 1600.f,
-			{ Door(EPLGEdge::NegX, Double), Door(EPLGEdge::PosX, Double), Door(EPLGEdge::PosY, Small), Door(EPLGEdge::NegY, Small) }));
-		Out.Add(Module(TEXT("End"), EPLGRole::End, 800.f, 800.f, { Door(EPLGEdge::NegX, Small) }));
-		// General room frames, reused and themed
-		Out.Add(Module(TEXT("RoomSmall"), EPLGRole::Room, 800.f, 800.f,
-			{ Door(EPLGEdge::NegX, Small), Door(EPLGEdge::PosX, Small), Door(EPLGEdge::PosY, Small) }));
-		Out.Add(Module(TEXT("RoomLarge"), EPLGRole::Room, 1200.f, 1000.f,
-			{ Door(EPLGEdge::NegX, Double), Door(EPLGEdge::PosX, Small), Door(EPLGEdge::PosY, Small, 300.f), Door(EPLGEdge::NegY, Small, -300.f) }));
+		FPLGModuleDef Hub = Module(TEXT("Hub"), EPLGRole::Hub, 1600.f, 1600.f,
+			{ Door(EPLGEdge::NegX, Double), Door(EPLGEdge::PosX, Double), Door(EPLGEdge::PosY, Small), Door(EPLGEdge::NegY, Small) });
+		Hub.SpawnPoints = { Spot(TEXT("Guard"), 0.f, 0.f), Spot(TEXT("Item"), -450.f, 450.f), Spot(TEXT("Item"), 450.f, -450.f),
+			Spot(TEXT("HideLarge"), 755.f, -500.f, 180.f) };
+		Out.Add(Hub);
+
+		FPLGModuleDef End = Module(TEXT("End"), EPLGRole::End, 800.f, 800.f, { Door(EPLGEdge::NegX, Small) });
+		End.SpawnPoints = { Spot(TEXT("Item"), 200.f, 200.f), Spot(TEXT("Item"), 200.f, -200.f), Spot(TEXT("Item"), 250.f, 0.f),
+			Spot(TEXT("HideSmall"), 0.f, -355.f, 90.f) };
+		Out.Add(End);
+
+		// General room frames, reused and themed. Doors stay clear of furniture and hiding spots.
+		FPLGModuleDef RoomSmall = Module(TEXT("RoomSmall"), EPLGRole::Room, 800.f, 800.f,
+			{ Door(EPLGEdge::NegX, Small), Door(EPLGEdge::PosX, Small), Door(EPLGEdge::PosY, Small) });
+		RoomSmall.SpawnPoints = { Spot(TEXT("Item"), -250.f, 200.f), Spot(TEXT("Item"), 250.f, 200.f), Spot(TEXT("Item"), 0.f, -100.f),
+			Spot(TEXT("Item"), 220.f, -150.f), Spot(TEXT("HideSmall"), 200.f, -355.f, 90.f) };
+		RoomSmall.Props = Desk(-200.f, -320.f, 150.f, 80.f);
+		Out.Add(RoomSmall);
+
+		FPLGModuleDef RoomLarge = Module(TEXT("RoomLarge"), EPLGRole::Room, 1200.f, 1000.f,
+			{ Door(EPLGEdge::NegX, Double), Door(EPLGEdge::PosX, Small), Door(EPLGEdge::PosY, Small, 300.f), Door(EPLGEdge::NegY, Small, -300.f) });
+		RoomLarge.SpawnPoints = { Spot(TEXT("Item"), -350.f, -150.f), Spot(TEXT("Item"), 0.f, 250.f), Spot(TEXT("Item"), 350.f, 150.f),
+			Spot(TEXT("Item"), 50.f, -200.f), Spot(TEXT("Item"), -100.f, 50.f), Spot(TEXT("HideLarge"), -300.f, 455.f, -90.f) };
+		RoomLarge.Props = Desk(300.f, -410.f, 150.f, 80.f);
+		Out.Add(RoomLarge);
 		// Corridors, 300 cm wide
 		Out.Add(Module(TEXT("CorridorStraight"), EPLGRole::Corridor, 800.f, 300.f, { Door(EPLGEdge::NegX, Small), Door(EPLGEdge::PosX, Small) }, 2.f));
 		Out.Add(Module(TEXT("CorridorCorner"), EPLGRole::Corridor, 300.f, 300.f, { Door(EPLGEdge::NegX, Small), Door(EPLGEdge::PosY, Small) }));
